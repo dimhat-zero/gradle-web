@@ -1,5 +1,4 @@
-package hello;
-import org.springframework.beans.factory.ListableBeanFactory;
+package org.dimhat.hello;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.context.ConfigurableApplicationContext;

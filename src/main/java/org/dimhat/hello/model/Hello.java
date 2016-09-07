@@ -1,4 +1,4 @@
-package hello;
+package org.dimhat.hello.model;
 
 public class Hello {
     private final long id;

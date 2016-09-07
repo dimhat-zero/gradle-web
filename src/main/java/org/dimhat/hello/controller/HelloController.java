@@ -1,5 +1,6 @@
-package hello;
+package org.dimhat.hello.controller;
 
+import org.dimhat.hello.model.Hello;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
