@@ -19,7 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.DigestUtils;
 
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 注解事务优点
@@ -70,23 +72,27 @@ public class SeckillServiceImpl implements SeckillService {
         return md5;
     }
 
-
+    /**
+     * 优化insert在update之前，减少update的锁竞争
+     */
     public SeckillExecution executeSeckill(long seckillId, long userPhone, String md5) throws SeckillException, SeckillCloseException, RepeatKillException {
         if(md5==null || !md5.equals(getMD5(seckillId))){
             throw new SeckillException("seckill data rewrite");
         }
         try{
-            int reduceNumber = seckillDao.reduceNumber(seckillId, new Date());
-            if(reduceNumber<=0){
-                throw new SeckillCloseException("seckill is colsed");
-            }else {
-                int insertCount = successKilledDao.insertSuccesskilled(seckillId, userPhone);
-                if(insertCount<=0){
-                    throw new RepeatKillException("seckill repeated");
+            int insertCount = successKilledDao.insertSuccesskilled(seckillId, userPhone);
+            if(insertCount<=0){
+                throw new RepeatKillException("seckill repeated");
+            }else{
+                int reduceNumber = seckillDao.reduceNumber(seckillId, new Date());
+                if(reduceNumber<=0){
+                    throw new SeckillCloseException("seckill is colsed");
+                }else {
+                    SuccessKilled successKilled = successKilledDao.queryByIdWithSeckill(seckillId, userPhone);
+                    return new SeckillExecution(seckillId, SeckillStatEnum.SUCCESS,successKilled);
                 }
-                SuccessKilled successKilled = successKilledDao.queryByIdWithSeckill(seckillId, userPhone);
-                return new SeckillExecution(seckillId, SeckillStatEnum.SUCCESS,successKilled);
             }
+
         }catch (SeckillCloseException e){
             throw e;
         } catch (RepeatKillException e){
@@ -96,5 +102,31 @@ public class SeckillServiceImpl implements SeckillService {
             throw new SeckillException("seckill inner error:"+e.getMessage());
         }
 
+    }
+
+    public SeckillExecution executeSeckillProcedure(long seckillId,long userPhone,String md5){
+        if(md5==null || !md5.equals(getMD5(seckillId))){
+            return new SeckillExecution(seckillId,SeckillStatEnum.DATA_REWRITE);
+        }
+        Date killTime  = new Date();
+        Map<String,Object> map = new HashMap<String,Object>();
+        map.put("seckillId",seckillId);
+        map.put("phone",userPhone);
+        map.put("killTime",killTime);
+        map.put("result",null);
+        try {
+            seckillDao.killByProcedure(map);
+            //MapUtils.getInteger(map,"result",-2);
+            int result = map.get("result")==null?-2: (Integer) map.get("result");
+            if(result ==1 ){
+                SuccessKilled sk  = successKilledDao.queryByIdWithSeckill(seckillId,userPhone);
+                return new SeckillExecution(seckillId,SeckillStatEnum.SUCCESS,sk);
+            }else{
+                return new SeckillExecution(seckillId,SeckillStatEnum.stateOf(result));
+            }
+        }catch (Exception e){
+            logger.error(e.getMessage(),e);
+            return new SeckillExecution(seckillId,SeckillStatEnum.INNER_ERROR);
+        }
     }
 }
